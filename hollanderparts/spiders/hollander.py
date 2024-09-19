@@ -8,24 +8,18 @@ class HollanderSpider(scrapy.Spider):
     start_urls = ["https://www.hollanderparts.com/"]
 
     def parse(self, response):
-        # Example: Extracting categories or parts listings from the homepage
-        categories = response.xpath("//div[@class='category-list']//a/@href").getall()
-        for category in categories:
-            category_url = response.urljoin(category)
-            yield scrapy.Request(url=category_url, callback=self.parse_category)
-    
-    def parse_category(self, response):
-        # Example: Extract details of individual parts in each category
-        parts = response.xpath("//div[@class='part-list-item']")
-        for part in parts:
-            yield {
-                'title': part.xpath(".//h2/a/text()").get(),
-                'price': part.xpath(".//div[@class='price']/text()").get(),
-                'details_url': response.urljoin(part.xpath(".//h2/a/@href").get())
-            }
-        
-        # Handle pagination if exists
-        next_page = response.xpath("//a[@class='next-page']/@href").get()
-        if next_page:
-            next_page_url = response.urljoin(next_page)
-            yield scrapy.Request(url=next_page_url, callback=self.parse_category)
+        # Save the HTML content of the current page
+        page = response.url.split("/")[-2]
+        filename = f"hollander-{page}.html"
+        with open(filename, 'wb') as f:
+            f.write(response.body)
+
+        # Find all the links on the page and follow them
+        links = response.css('a::attr(href)').getall()
+        for link in links:
+            # Ensure links are within the allowed domains and are complete URLs
+            if link and "hollanderparts.com" in link:
+                yield response.follow(link, self.parse)
+            elif link and link.startswith('/'):
+                # For relative links, add the domain
+                yield response.follow(response.urljoin(link), self.parse)
